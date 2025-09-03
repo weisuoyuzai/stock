@@ -89,9 +89,10 @@ def create_table_if_not_exists(engine, table_name, sample_df):
 def extract_years_from_filename(filename):
     """从文件名中提取年份范围"""
     # 匹配格式: data_2000_2004.csv
-    match = re.search(r'data_\w+_(\d{4})_(\d{4})\.csv', filename)
+    match = re.findall(r'_(\d{4})_(\d{4})', filename)
     if match:
-        return int(match.group(1)), int(match.group(2))
+        year1, year2 = match[0]
+        return int(year1), int(year2)
     return None, None
 
 def load_and_insert_data(file_path, engine, market=""):
