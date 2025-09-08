@@ -43,8 +43,8 @@ class DatabaseConfig:
         
         # ClickHouse配置
         self.clickhouse_config = {
-            'host': os.environ.get('CLICKHOUSE_HOST', '192.168.1.6'),
-            'port': int(os.environ.get('CLICKHOUSE_PORT', '8123')),
+            'host': os.environ.get('CLICKHOUSE_HOST', '192.168.2.9'),
+            'port': int(os.environ.get('CLICKHOUSE_PORT', '8124')),
             'tcp': os.environ.get('CLICKHOUSE_TCP', '9000'),
             'username': os.environ.get('CLICKHOUSE_USER', 'root'),
             'password': os.environ.get('CLICKHOUSE_PASSWORD', '123456'),

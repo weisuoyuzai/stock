@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 # ClickHouse配置
 CLICKHOUSE_CONFIG = {
-    'host': os.environ.get('CLICKHOUSE_HOST', '192.168.1.6'),
-    'port': int(os.environ.get('CLICKHOUSE_PORT', '8123')),
+    'host': os.environ.get('CLICKHOUSE_HOST', '192.168.2.9'),
+    'port': int(os.environ.get('CLICKHOUSE_PORT', '8124')),
     'username': os.environ.get('CLICKHOUSE_USER', 'root'),
     'password': os.environ.get('CLICKHOUSE_PASSWORD', '123456'),
     'database': os.environ.get('CLICKHOUSE_DB', 'instockdb')
@@ -159,49 +159,39 @@ class ClickHouseClient:
             return False
     
     def _prepare_dataframe_for_insert(self, df: pd.DataFrame, table_definition: dict = None) -> pd.DataFrame:
-        """准备DataFrame以便插入ClickHouse"""        
-        # 创建DataFrame副本
+        """准备DataFrame以便插入ClickHouse"""
         df_clean = df.copy()
-        
-        # 处理每一列，确保数据类型兼容ClickHouse
         for col in df_clean.columns:
             series = df_clean[col]
             logger.info(f"处理列 {col}, 数据类型: {series.dtype}")
-            
-            # 根据列名和数据类型进行转换
+
+            # Prioritize schema definition for type conversion
+            if table_definition:
+                if self._is_temporal_field(col, table_definition):
+                    logger.info(f"列 {col} (Schema: Temporal) -> 转换为datetime")
+                    df_clean[col] = self._convert_series_to_datetime(series)
+                    continue
+                if self._is_string_field(col, table_definition):
+                    logger.info(f"列 {col} (Schema: String) -> 转换为string")
+                    df_clean[col] = series.astype(str).where(pd.notna(series), None)
+                    continue
+
+            # Fallback for when schema is not available
             if 'date' in col.lower():
-                try:
-                    # 检查表定义中该字段的类型
-                    field_is_string = self._is_string_field(col, table_definition)
-                    
-                    if field_is_string or col.lower() in ['report_date', 'listing_date']:
-                        logger.info(f"日期列 {col} 转换为字符串格式")
-                        df_clean[col] = self._convert_series_to_date_string(series)
-                    else:
-                        logger.info(f"日期列 {col} 转换为datetime类型")
-                        df_clean[col] = self._convert_series_to_datetime(series)
-                        
-                except Exception as e:
-                    logger.error(f"日期转换失败 {col}: {e}")
-                    df_clean[col] = [None] * len(series)
-                    
+                logger.info(f"列 {col} (Name-based) -> 转换为datetime")
+                df_clean[col] = self._convert_series_to_datetime(series)
             elif series.dtype.name.startswith('int'):
                 df_clean[col] = series.where(pd.notna(series), None).astype('Int64')
-                
             elif series.dtype.name.startswith('float'):
                 df_clean[col] = series.where(pd.notna(series), None)
-                
             elif series.dtype == 'bool':
                 df_clean[col] = series.astype('Int64')
-                
-            elif series.dtype == 'object':
-                df_clean[col] = series.where(pd.notna(series) & (series != ''), None)
-                
-            else:
+            else:  # Fallback for object and other types
+                logger.info(f"列 {col} (Fallback) -> 转换为string")
                 df_clean[col] = series.astype(str).where(pd.notna(series), None)
-        
+
         return df_clean
-    
+
     def _is_string_field(self, col: str, table_definition: dict = None) -> bool:
         """检查字段是否为String类型"""
         if not table_definition:
@@ -213,12 +203,26 @@ class ClickHouseClient:
                 field_type = column_def.get('type', '')
                 return 'String' in field_type
         return False
+
+    def _is_temporal_field(self, col: str, table_definition: dict = None) -> bool:
+        """检查字段是否为Date/DateTime类型"""
+        if not table_definition:
+            return False
+            
+        columns = table_definition.get('columns', [])
+        for column_def in columns:
+            if isinstance(column_def, dict) and column_def.get('name') == col:
+                field_type = column_def.get('type', '').lower()
+                return 'date' in field_type or 'time' in field_type
+        return False
     
     def _is_null_value(self, val) -> bool:
         """检查值是否为空值"""
-        return (pd.isna(val) or 
-                val in ['NaT', 'nat', 'None', '', 'nan', 'NaN'] or
-                (isinstance(val, str) and val.strip() == ''))
+        if pd.isna(val):
+            return True
+        if isinstance(val, str):
+            return val.strip() in ['NaT', 'nat', 'None', '', 'nan', 'NaN']
+        return False
     
     def _convert_single_value_to_date_string(self, val) -> str:
         """将单个值转换为日期字符串"""
@@ -277,11 +281,8 @@ class ClickHouseClient:
             dt = pd.to_datetime(str_val)
             return None if pd.isna(dt) else dt.strftime('%Y-%m-%d')
         except:
-            try:
-                # 如果无法解析为日期，保持原字符串
-                return str_val if str_val else None
-            except:
-                return None
+            # 如果无法解析为日期，则返回 None
+            return None
     
     def _convert_series_to_date_string(self, series: pd.Series) -> list:
         """将Series转换为日期字符串列表"""
