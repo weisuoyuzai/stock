@@ -48,7 +48,7 @@ def main():
     # 处理每个任务
     success_count = 0
     for index, (_, row) in enumerate(pending_df.iterrows(), 1):
-        code = row['code']
+        code = str(row['code']).zfill(6)
         market = str(row['market']).strip().lower()
         cmd = f"python bao.py {market}.{code}"
         percentage = (index / total) * 100

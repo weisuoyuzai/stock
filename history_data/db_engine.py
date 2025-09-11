@@ -3,17 +3,17 @@ import os
 import pandas as pd
 
 DB_CONFIG = {
-    'host': 'mariadb',
+    'host': '192.168.2.9',
     'user': 'root',
-    'password': os.environ.get('MYSQL_PASSWORD','123456'),
+    'password': os.environ.get('MYSQL_PASSWORD','root'),
     'database': 'instockdb',
     'port': 3306,
     'charset': 'utf8mb4'
 }
 
 CLICKHOUSE_CONFIG = {
-    'host': 'clickhouse',
-    'port': 8123,
+    'host': '192.168.2.9',
+    'port': 8124,
     'username': 'root',
     'password': os.environ.get('CLICKHOUSE_PASSWORD','123456'),
     'database': 'instockdb'
